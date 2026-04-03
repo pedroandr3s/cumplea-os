@@ -8,52 +8,27 @@ export const FIXED_DESTINATION = {
   address: "Constitución 901, Chillán"
 }
 
-// Get walking distance between two points using OSRM
-async function getWalkingDistance(
-  lat1: number,
-  lng1: number,
-  lat2: number,
-  lng2: number
-): Promise<number> {
-  try {
-    const response = await fetch(
-      `https://router.project-osrm.org/route/v1/foot/${lng1},${lat1};${lng2},${lat2}?overview=false`
-    )
-    const data = await response.json()
-    if (data.routes && data.routes[0]) {
-      return data.routes[0].distance / 1000
-    }
-  } catch (error) {
-    console.error("Error getting walking distance:", error)
-  }
-  return haversineDistance(lat1, lng1, lat2, lng2)
-}
-
-// Get walking route geometry between multiple points
+// Get walking route geometry via Google Directions API (mode=walking)
 export async function getWalkingRoute(
   locations: Location[]
 ): Promise<[number, number][]> {
-  if (locations.length < 2) return []
-  
-  const coordinates = locations
-    .map((loc) => `${loc.lng},${loc.lat}`)
-    .join(";")
-  
+  if (locations.length < 2) return locations.map((loc) => [loc.lat, loc.lng])
+
+  const points = locations
+    .map((loc) => `${loc.lat},${loc.lng}`)
+    .join('|')
+
   try {
-    const response = await fetch(
-      `https://router.project-osrm.org/route/v1/foot/${coordinates}?overview=full&geometries=geojson`
-    )
-    const data = await response.json()
-    
-    if (data.routes && data.routes[0] && data.routes[0].geometry) {
-      return data.routes[0].geometry.coordinates.map(
-        (coord: [number, number]) => [coord[1], coord[0]]
-      )
+    const response = await fetch(`/api/route?points=${encodeURIComponent(points)}`)
+    if (response.ok) {
+      const data: [number, number][] = await response.json()
+      if (data.length > 1) return data
     }
   } catch (error) {
     console.error("Error getting walking route:", error)
   }
-  
+
+  // Fallback: straight lines between points
   return locations.map((loc) => [loc.lat, loc.lng])
 }
 
