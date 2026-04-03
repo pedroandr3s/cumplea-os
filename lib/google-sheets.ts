@@ -64,52 +64,27 @@ function cleanAddress(raw: string): string {
     .trim()
 }
 
-// Shorten a full Google formatted_address to just street + city
-function shortenGoogleAddress(full: string): string {
-  return full
-    .replace(/,?\s*Chile$/i, '')
-    .replace(/,?\s*Región de Ñuble/i, '')
-    .replace(/,?\s*Provincia de Diguillín/i, '')
-    .replace(/\b\d{7}\b/g, '')
-    .replace(/,\s*,/g, ',')
-    .replace(/,\s*$/, '')
-    .trim()
-}
-
-// Geocode using Google Maps Geocoding API (fast, accurate, no rate limit issues)
-async function geocodeAddressGoogle(
-  address: string,
-  apiKey: string
+// Geocode via server-side proxy (API key never exposed to browser)
+async function geocodeAddress(
+  address: string
 ): Promise<{ lat: number; lng: number; formattedAddress: string } | null> {
   try {
-    const query = encodeURIComponent(`${address}, Chillán, Chile`)
-    const res = await fetch(
-      `https://maps.googleapis.com/maps/api/geocode/json?address=${query}&key=${apiKey}&language=es&region=cl`
-    )
+    const res = await fetch(`/api/geocode?address=${encodeURIComponent(address)}`)
+    if (!res.ok) return null
     const data = await res.json()
-    if (data.status === 'OK' && data.results[0]) {
-      const loc = data.results[0].geometry.location
-      return {
-        lat: loc.lat,
-        lng: loc.lng,
-        formattedAddress: shortenGoogleAddress(data.results[0].formatted_address),
-      }
-    }
-    if (data.status !== 'ZERO_RESULTS') {
-      console.warn('Google Geocoding:', data.status, address)
+    if (data?.lat && data?.lng) {
+      return { lat: data.lat, lng: data.lng, formattedAddress: data.address ?? address }
     }
   } catch (error) {
-    console.error('Error geocoding with Google:', address, error)
+    console.error('Error geocoding:', address, error)
   }
   return null
 }
 
-// Main function: fetch sheet, parse CSV, geocode each address with Google Maps
+// Main function: fetch sheet, parse CSV, geocode each address via /api/geocode
 export async function fetchGoogleSheetData(
   onProgress?: (current: number, total: number, lugar: string) => void
 ): Promise<GeocodedRow[]> {
-  const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
-
   const response = await fetch('/api/sheets')
   if (!response.ok) {
     throw new Error('No se pudo obtener la hoja de cálculo. Verifica que el documento sea público.')
@@ -124,35 +99,26 @@ export async function fetchGoogleSheetData(
 
   const results: GeocodedRow[] = []
 
-  // With Google Maps API we can geocode concurrently (much faster than Nominatim)
   const geocodeRow = async (row: SheetRow, index: number): Promise<GeocodedRow> => {
     const cleanDir = cleanAddress(row.direccion)
     onProgress?.(index + 1, rows.length, row.lugar)
 
-    if (cleanDir && apiKey) {
-      const result = await geocodeAddressGoogle(cleanDir, apiKey)
+    if (cleanDir) {
+      const result = await geocodeAddress(cleanDir)
       if (result) {
-        return {
-          ...row,
-          direccion: result.formattedAddress || cleanDir,
-          lat: result.lat,
-          lng: result.lng,
-        }
+        return { ...row, direccion: result.formattedAddress || cleanDir, lat: result.lat, lng: result.lng }
       }
     }
 
-    // Fallback: use Chillán center
     console.warn(`No se pudo geocodificar: ${cleanDir}`)
     return { ...row, direccion: cleanDir, lat: -36.6066, lng: -72.1034 }
   }
 
-  // Process in small batches to avoid overwhelming the API
+  // Process in batches of 5 concurrently
   const BATCH_SIZE = 5
   for (let i = 0; i < rows.length; i += BATCH_SIZE) {
     const batch = rows.slice(i, i + BATCH_SIZE)
-    const geocoded = await Promise.all(
-      batch.map((row, j) => geocodeRow(row, i + j))
-    )
+    const geocoded = await Promise.all(batch.map((row, j) => geocodeRow(row, i + j)))
     results.push(...geocoded)
   }
 

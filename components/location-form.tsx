@@ -1,10 +1,19 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, useCallback } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { MapPin, Tag, Building2, Save, X } from "lucide-react"
+import { MapPin, Tag, Building2, Save, X, Loader2 } from "lucide-react"
+
+interface Prediction {
+  place_id: string
+  description: string
+  structured_formatting: {
+    main_text: string
+    secondary_text: string
+  }
+}
 
 interface LocationFormProps {
   onSave: (data: {
@@ -17,106 +26,91 @@ interface LocationFormProps {
   onClearPending: () => void
 }
 
-declare global {
-  interface Window {
-    google: any
-    __gmapsLoaded?: boolean
-  }
-}
-
-function loadGoogleMapsScript(apiKey: string): Promise<void> {
-  return new Promise((resolve) => {
-    if (window.__gmapsLoaded || window.google?.maps?.places) {
-      window.__gmapsLoaded = true
-      resolve()
-      return
-    }
-    if (document.querySelector('script[data-gm="1"]')) {
-      // Script already injected, wait for it
-      const check = setInterval(() => {
-        if (window.google?.maps?.places) {
-          window.__gmapsLoaded = true
-          clearInterval(check)
-          resolve()
-        }
-      }, 100)
-      return
-    }
-    const script = document.createElement('script')
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places&language=es&region=CL`
-    script.async = true
-    script.setAttribute('data-gm', '1')
-    script.onload = () => {
-      window.__gmapsLoaded = true
-      resolve()
-    }
-    document.head.appendChild(script)
-  })
-}
-
 export default function LocationForm({ onSave, onClearPending }: LocationFormProps) {
   const [name, setName] = useState("")
+  const [addressQuery, setAddressQuery] = useState("")
   const [promotion, setPromotion] = useState("")
+  const [predictions, setPredictions] = useState<Prediction[]>([])
+  const [isSearching, setIsSearching] = useState(false)
+  const [showDropdown, setShowDropdown] = useState(false)
   const [selectedAddress, setSelectedAddress] = useState<{
     display_name: string
     lat: number
     lng: number
   } | null>(null)
 
-  const addressInputRef = useRef<HTMLInputElement>(null)
-  const autocompleteRef = useRef<any>(null)
+  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const sessionTokenRef = useRef(crypto.randomUUID())
+  const dropdownRef = useRef<HTMLDivElement>(null)
 
-  // Load Google Maps and initialize Places Autocomplete
+  // Search predictions as user types
   useEffect(() => {
-    const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
-    if (!apiKey || typeof window === 'undefined') return
+    if (selectedAddress) return
+    if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current)
 
-    loadGoogleMapsScript(apiKey).then(() => {
-      if (!addressInputRef.current || autocompleteRef.current) return
+    if (addressQuery.length < 3) {
+      setPredictions([])
+      setShowDropdown(false)
+      return
+    }
 
-      const autocomplete = new window.google.maps.places.Autocomplete(
-        addressInputRef.current,
-        {
-          componentRestrictions: { country: 'cl' },
-          fields: ['formatted_address', 'geometry', 'name'],
-          types: ['address'],
-        }
-      )
+    searchTimeoutRef.current = setTimeout(async () => {
+      setIsSearching(true)
+      try {
+        const res = await fetch(
+          `/api/places?input=${encodeURIComponent(addressQuery)}&sessiontoken=${sessionTokenRef.current}`
+        )
+        const data: Prediction[] = await res.json()
+        setPredictions(data)
+        setShowDropdown(data.length > 0)
+      } catch {
+        setPredictions([])
+      } finally {
+        setIsSearching(false)
+      }
+    }, 350)
 
-      autocomplete.addListener('place_changed', () => {
-        const place = autocomplete.getPlace()
-        if (place.geometry?.location) {
-          const lat = place.geometry.location.lat()
-          const lng = place.geometry.location.lng()
-          const address = shortenAddress(place.formatted_address || place.name || '')
-          setSelectedAddress({ display_name: address, lat, lng })
-          // Update the input to show the cleaned address
-          if (addressInputRef.current) {
-            addressInputRef.current.value = address
-          }
-        }
-      })
+    return () => {
+      if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current)
+    }
+  }, [addressQuery, selectedAddress])
 
-      autocompleteRef.current = autocomplete
-    })
+  // Close dropdown on outside click
+  useEffect(() => {
+    const handleClick = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setShowDropdown(false)
+      }
+    }
+    document.addEventListener("mousedown", handleClick)
+    return () => document.removeEventListener("mousedown", handleClick)
   }, [])
 
-  function shortenAddress(full: string): string {
-    return full
-      .replace(/,?\s*Chile$/i, '')
-      .replace(/,?\s*Región de Ñuble/i, '')
-      .replace(/,?\s*Provincia de Diguillín/i, '')
-      .replace(/\b\d{7}\b/g, '')
-      .replace(/,\s*,/g, ',')
-      .replace(/,\s*$/, '')
-      .trim()
-  }
-
-  const handleAddressInput = () => {
-    // Clear selected address when user types manually (before selecting a suggestion)
-    if (selectedAddress) {
-      setSelectedAddress(null)
+  const handleSelectPrediction = useCallback(async (prediction: Prediction) => {
+    setShowDropdown(false)
+    setAddressQuery(prediction.description)
+    setIsSearching(true)
+    try {
+      const res = await fetch(
+        `/api/places/details?place_id=${prediction.place_id}&sessiontoken=${sessionTokenRef.current}`
+      )
+      const data = await res.json()
+      if (data) {
+        setSelectedAddress({ display_name: data.address, lat: data.lat, lng: data.lng })
+        setAddressQuery(data.address)
+      }
+    } catch {
+      // fallback: keep the prediction text, no coordinates
+    } finally {
+      setIsSearching(false)
+      // Rotate session token after a completed session
+      sessionTokenRef.current = crypto.randomUUID()
     }
+  }, [])
+
+  const handleAddressChange = (value: string) => {
+    setAddressQuery(value)
+    if (selectedAddress) setSelectedAddress(null)
   }
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -132,20 +126,22 @@ export default function LocationForm({ onSave, onClearPending }: LocationFormPro
     })
 
     setName("")
+    setAddressQuery("")
     setPromotion("")
     setSelectedAddress(null)
-    if (addressInputRef.current) addressInputRef.current.value = ""
+    setPredictions([])
   }
 
   const handleCancel = () => {
     setName("")
+    setAddressQuery("")
     setPromotion("")
     setSelectedAddress(null)
-    if (addressInputRef.current) addressInputRef.current.value = ""
+    setPredictions([])
     onClearPending()
   }
 
-  const hasContent = name || selectedAddress || promotion
+  const hasContent = name || addressQuery || promotion
 
   return (
     <Card className="border-border/50 shadow-sm">
@@ -155,7 +151,7 @@ export default function LocationForm({ onSave, onClearPending }: LocationFormPro
           Agregar Ubicación
         </CardTitle>
         <p className="text-sm text-muted-foreground">
-          Busca una dirección en Chillán con Google Maps
+          Busca una dirección en Chillán
         </p>
       </CardHeader>
       <CardContent>
@@ -174,32 +170,69 @@ export default function LocationForm({ onSave, onClearPending }: LocationFormPro
             />
           </div>
 
-          <div className="flex flex-col gap-1.5">
+          <div className="relative flex flex-col gap-1.5" ref={dropdownRef}>
             <label className="flex items-center gap-2 text-sm font-medium text-foreground">
               <MapPin className="h-4 w-4 text-muted-foreground" />
               Dirección en Chillán
             </label>
-            <input
-              ref={addressInputRef}
-              type="text"
-              onChange={handleAddressInput}
-              placeholder="Escribe para buscar con Google Maps..."
-              className={`flex h-9 w-full rounded-md border px-3 py-1 text-sm shadow-sm transition-colors bg-background outline-none focus:ring-1 focus:ring-ring ${
-                selectedAddress
-                  ? 'border-green-400 focus:ring-green-400'
-                  : 'border-input'
-              }`}
-              autoComplete="off"
-            />
+            <div className="relative">
+              <Input
+                value={addressQuery}
+                onChange={(e) => handleAddressChange(e.target.value)}
+                placeholder="Escribe para buscar... Ej: El Roble 736"
+                className={`bg-background pr-8 ${selectedAddress ? "border-green-400" : ""}`}
+                autoComplete="off"
+              />
+              {isSearching && (
+                <Loader2 className="absolute right-2 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-muted-foreground" />
+              )}
+            </div>
+
             {selectedAddress && (
               <p className="text-xs text-green-600 flex items-center gap-1">
                 <MapPin className="h-3 w-3" />
-                Ubicación confirmada por Google Maps
+                Ubicación confirmada
               </p>
             )}
-            {!selectedAddress && (
+
+            {/* Google Places suggestions dropdown */}
+            {showDropdown && predictions.length > 0 && (
+              <div className="absolute left-0 right-0 top-full z-50 mt-1 max-h-64 overflow-auto rounded-md border border-border bg-card shadow-lg">
+                {predictions.map((pred) => (
+                  <button
+                    key={pred.place_id}
+                    type="button"
+                    className="flex w-full items-start gap-2 px-3 py-2.5 text-left hover:bg-muted/60 focus:bg-muted/60 focus:outline-none"
+                    onClick={() => handleSelectPrediction(pred)}
+                  >
+                    <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium">
+                        {pred.structured_formatting?.main_text ?? pred.description}
+                      </p>
+                      {pred.structured_formatting?.secondary_text && (
+                        <p className="truncate text-xs text-muted-foreground">
+                          {pred.structured_formatting.secondary_text}
+                        </p>
+                      )}
+                    </div>
+                  </button>
+                ))}
+                <p className="px-3 py-1.5 text-right text-[10px] text-muted-foreground/60">
+                  powered by Google
+                </p>
+              </div>
+            )}
+
+            {!isSearching && !showDropdown && !selectedAddress && addressQuery.length >= 3 && predictions.length === 0 && (
               <p className="text-xs text-muted-foreground">
-                Selecciona una opción del desplegable de Google
+                No se encontraron resultados. Intenta con otra dirección.
+              </p>
+            )}
+
+            {addressQuery.length > 0 && addressQuery.length < 3 && (
+              <p className="text-xs text-muted-foreground">
+                Escribe al menos 3 caracteres
               </p>
             )}
           </div>
