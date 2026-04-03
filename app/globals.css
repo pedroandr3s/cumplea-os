@@ -3,6 +3,26 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* Google Maps Places Autocomplete dropdown */
+.pac-container {
+  z-index: 9999 !important;
+  border-radius: 8px;
+  border: 1px solid hsl(var(--border, 214 32% 91%));
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  font-family: inherit;
+  font-size: 13px;
+}
+.pac-item {
+  padding: 6px 12px;
+  cursor: pointer;
+}
+.pac-item:hover {
+  background-color: #f1f5f9;
+}
+.pac-item-query {
+  font-size: 13px;
+}
+
 :root {
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
