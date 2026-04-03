@@ -1,11 +1,11 @@
 import type { Location } from "./types"
 
-// Punto de destino fijo: Constitución 901, Chillán
+// Punto de destino fijo: Constitución 923, Chillán
 export const FIXED_DESTINATION = {
-  lat: -36.6075,
-  lng: -72.1028,
+  lat: -36.6084,
+  lng: -72.0978,
   name: "Destino Final",
-  address: "Constitución 901, Chillán"
+  address: "Constitución 923, Chillán"
 }
 
 // Get walking route geometry via Google Directions API (mode=walking)

@@ -7,7 +7,7 @@
  *   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
  *   fecha_creacion TIMESTAMPTZ DEFAULT NOW(),
  *   punto_inicio TEXT NOT NULL,
- *   punto_final TEXT DEFAULT 'Constitución 901, Chillán',
+ *   punto_final TEXT DEFAULT 'Constitución 923, Chillán',
  *   distancia_total FLOAT,
  *   usuario_id TEXT
  * );
@@ -102,7 +102,7 @@ export async function saveRouteToSupabase(
     body: JSON.stringify([
       {
         punto_inicio: startPoint.name,
-        punto_final: 'Constitución 901, Chillán',
+        punto_final: 'Constitución 923, Chillán',
         distancia_total: parseFloat(totalDistance.toFixed(3)),
       },
     ]),

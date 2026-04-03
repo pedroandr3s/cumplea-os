@@ -344,7 +344,7 @@ export default function LocationsList({
                   {selectedCount >= 1 && (
                     <div className="rounded-md bg-muted/50 p-2 text-xs text-muted-foreground">
                       <p className="mb-1">
-                        <strong>Destino final fijo:</strong> Constitución 901
+                        <strong>Destino final fijo:</strong> Constitución 923
                       </p>
                       {!startPointId && (
                         <p className="text-amber-600">
