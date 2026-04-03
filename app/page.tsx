@@ -116,7 +116,7 @@ export default function RoutePlannerPage() {
   }
 
   const handleSetStart = (id: string) => {
-    setStartPointId(id)
+    setStartPointId(id || null)
   }
 
   const handleDelete = (id: string) => {
@@ -129,26 +129,34 @@ export default function RoutePlannerPage() {
 
   const handleGenerateRoute = async () => {
     const selectedLocations = locations.filter((l) => l.selected)
-    if (!startPointId || selectedLocations.length < 1) return
-
-    // Make sure start point is among selected
-    const effectiveStartId = selectedLocations.find((l) => l.id === startPointId)
-      ? startPointId
-      : selectedLocations[0].id
+    if (selectedLocations.length < 1) return
 
     setIsGenerating(true)
     try {
-      const { route, totalDistance: distance } = await optimizeRoute(
-        selectedLocations,
-        effectiveStartId
-      )
+      // If user picked a valid start point use it; otherwise try all and pick shortest
+      const validStart = startPointId && selectedLocations.find((l) => l.id === startPointId)
+        ? startPointId
+        : null
+
+      const idsToTry = validStart ? [validStart] : selectedLocations.map((l) => l.id)
+
+      let bestRoute: Location[] = []
+      let bestDistance = Infinity
+
+      for (const id of idsToTry) {
+        const { route, totalDistance } = await optimizeRoute(selectedLocations, id)
+        if (totalDistance < bestDistance) {
+          bestDistance = totalDistance
+          bestRoute = route
+        }
+      }
 
       const destination = getDestination()
-      destination.order = route.length + 1
-      const routeWithDestination = [...route, destination]
+      destination.order = bestRoute.length + 1
+      const routeWithDestination = [...bestRoute, destination]
 
       setOptimizedRouteData(routeWithDestination)
-      setTotalDistance(distance)
+      setTotalDistance(bestDistance)
 
       const geometry = await getWalkingRoute(routeWithDestination)
       setRouteGeometry(geometry)
@@ -204,8 +212,8 @@ export default function RoutePlannerPage() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-background">
-      <header className="border-b border-border bg-card px-4 py-4 shadow-sm">
+    <div className="flex h-screen flex-col overflow-hidden bg-background">
+      <header className="shrink-0 border-b border-border bg-card px-4 py-3 shadow-sm">
         <div className="mx-auto flex max-w-7xl items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary text-primary-foreground">
             <Route className="h-5 w-5" />
@@ -221,15 +229,15 @@ export default function RoutePlannerPage() {
         </div>
       </header>
 
-      <main className="flex flex-1 flex-col gap-4 p-4 lg:flex-row lg:gap-6 lg:p-6">
-        <aside className="flex w-full flex-col gap-4 lg:w-80 lg:shrink-0">
+      <main className="flex flex-1 flex-col gap-4 overflow-hidden p-4 lg:flex-row lg:gap-6 lg:p-6">
+        <aside className="flex w-full shrink-0 flex-col gap-4 overflow-hidden lg:w-[420px]">
           {!isRouteGenerated && (
             <LocationForm
               onSave={handleSaveLocation}
               onClearPending={handleClearPending}
             />
           )}
-          <div className="flex-1 lg:min-h-0">
+          <div className="min-h-0 flex-1">
             <LocationsList
               locations={locations}
               optimizedRoute={optimizedRouteData}
@@ -251,7 +259,7 @@ export default function RoutePlannerPage() {
           </div>
         </aside>
 
-        <section className="flex-1 overflow-hidden rounded-xl border border-border shadow-sm lg:min-h-[600px]">
+        <section className="min-h-[300px] flex-1 overflow-hidden rounded-xl border border-border shadow-sm lg:min-h-0">
           <MapComponent
             locations={locations}
             optimizedRoute={optimizedRouteData}

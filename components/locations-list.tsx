@@ -257,8 +257,8 @@ export default function LocationsList({
                                 variant={location.id === startPointId ? "default" : "ghost"}
                                 size="icon"
                                 className="h-7 w-7"
-                                onClick={() => onSetStart(location.id)}
-                                title="Establecer como inicio"
+                                onClick={() => onSetStart(location.id === startPointId ? "" : location.id)}
+                                title={location.id === startPointId ? "Quitar como inicio" : "Establecer como inicio (opcional)"}
                                 disabled={!location.selected}
                               >
                                 <Play className="h-3.5 w-3.5" />
@@ -326,7 +326,7 @@ export default function LocationsList({
                 <>
                   <Button
                     onClick={onGenerateRoute}
-                    disabled={selectedCount < 1 || !startPointId || isGenerating}
+                    disabled={selectedCount < 1 || isGenerating}
                     className="w-full"
                   >
                     {isGenerating ? (
@@ -343,14 +343,15 @@ export default function LocationsList({
                   </Button>
                   {selectedCount >= 1 && (
                     <div className="rounded-md bg-muted/50 p-2 text-xs text-muted-foreground">
-                      <p className="mb-1">
+                      <p>
                         <strong>Destino final fijo:</strong> Constitución 923
                       </p>
-                      {!startPointId && (
-                        <p className="text-amber-600">
-                          Selecciona un punto de inicio con <Play className="inline h-3 w-3" />
-                        </p>
-                      )}
+                      <p className="mt-0.5">
+                        {startPointId
+                          ? <span className="text-primary">Inicio seleccionado <Play className="inline h-3 w-3" /></span>
+                          : <span>Inicio automático — el sistema elige el mejor punto</span>
+                        }
+                      </p>
                     </div>
                   )}
                 </>
