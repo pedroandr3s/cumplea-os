@@ -92,7 +92,7 @@ export default function LocationsList({
   const selectedCount = locations.filter((l) => l.selected).length
 
   return (
-    <Card className="flex h-full flex-col border-border/50 shadow-sm">
+    <Card className="flex flex-1 flex-col border-border/50 shadow-sm overflow-hidden">
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
           <CardTitle className="flex items-center gap-2 text-lg">

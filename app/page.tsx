@@ -164,7 +164,7 @@ export default function RoutePlannerPage() {
       setIsRouteGenerated(true)
 
       // Save to Supabase (fire and forget, update supabaseIds if successful)
-      saveRouteToSupabase(routeWithDestination, distance).then((result) => {
+      saveRouteToSupabase(routeWithDestination, bestDistance).then((result) => {
         if (result) {
           setOptimizedRouteData((prev) =>
             prev.map((loc) =>
@@ -229,15 +229,15 @@ export default function RoutePlannerPage() {
         </div>
       </header>
 
-      <main className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4 lg:overflow-hidden lg:flex-row lg:gap-6 lg:p-6">
-        <aside className="flex w-full shrink-0 flex-col gap-4 lg:w-[420px] lg:overflow-hidden">
+      <main className="flex flex-1 flex-col gap-4 overflow-y-auto p-4 lg:flex-row lg:gap-6 lg:overflow-hidden lg:p-6" style={{ minHeight: 0 }}>
+        <aside className="flex w-full shrink-0 flex-col gap-4 lg:w-[420px]" style={{ minHeight: 0 }}>
           {!isRouteGenerated && (
             <LocationForm
               onSave={handleSaveLocation}
               onClearPending={handleClearPending}
             />
           )}
-          <div className="h-[480px] lg:h-auto lg:min-h-0 lg:flex-1">
+          <div className="flex flex-col h-[480px] lg:h-auto lg:flex-1" style={{ minHeight: 0 }}>
             <LocationsList
               locations={locations}
               optimizedRoute={optimizedRouteData}
