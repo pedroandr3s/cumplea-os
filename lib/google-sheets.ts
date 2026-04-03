@@ -64,16 +64,31 @@ function cleanAddress(raw: string): string {
     .trim()
 }
 
-// Geocode via server-side proxy (API key never exposed to browser)
+// Geocode using the same Places API flow as manual search (autocomplete → details)
 async function geocodeAddress(
   address: string
 ): Promise<{ lat: number; lng: number; formattedAddress: string } | null> {
   try {
-    const res = await fetch(`/api/geocode?address=${encodeURIComponent(address)}`)
-    if (!res.ok) return null
-    const data = await res.json()
-    if (data?.lat && data?.lng) {
-      return { lat: data.lat, lng: data.lng, formattedAddress: data.address ?? address }
+    const sessionToken = crypto.randomUUID()
+
+    // Step 1: autocomplete to get a place_id
+    const res1 = await fetch(
+      `/api/places?input=${encodeURIComponent(address)}&sessiontoken=${sessionToken}`
+    )
+    if (!res1.ok) return null
+    const predictions = await res1.json()
+    if (!Array.isArray(predictions) || predictions.length === 0) return null
+
+    const placeId = predictions[0].place_id
+
+    // Step 2: place details to get lat/lng + clean address
+    const res2 = await fetch(
+      `/api/places/details?place_id=${placeId}&sessiontoken=${sessionToken}`
+    )
+    if (!res2.ok) return null
+    const details = await res2.json()
+    if (details?.lat && details?.lng) {
+      return { lat: details.lat, lng: details.lng, formattedAddress: details.address ?? address }
     }
   } catch (error) {
     console.error('Error geocoding:', address, error)
