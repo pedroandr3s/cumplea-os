@@ -212,7 +212,7 @@ export default function RoutePlannerPage() {
   }
 
   return (
-    <div className="flex h-screen flex-col overflow-hidden bg-background">
+    <div className="flex h-dvh flex-col bg-background">
       <header className="shrink-0 border-b border-border bg-card px-4 py-3 shadow-sm">
         <div className="mx-auto flex max-w-7xl items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary text-primary-foreground">
@@ -229,15 +229,15 @@ export default function RoutePlannerPage() {
         </div>
       </header>
 
-      <main className="flex flex-1 flex-col gap-4 overflow-hidden p-4 lg:flex-row lg:gap-6 lg:p-6">
-        <aside className="flex w-full shrink-0 flex-col gap-4 overflow-hidden lg:w-[420px]">
+      <main className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4 lg:overflow-hidden lg:flex-row lg:gap-6 lg:p-6">
+        <aside className="flex w-full shrink-0 flex-col gap-4 lg:w-[420px] lg:overflow-hidden">
           {!isRouteGenerated && (
             <LocationForm
               onSave={handleSaveLocation}
               onClearPending={handleClearPending}
             />
           )}
-          <div className="min-h-0 flex-1">
+          <div className="h-[480px] lg:h-auto lg:min-h-0 lg:flex-1">
             <LocationsList
               locations={locations}
               optimizedRoute={optimizedRouteData}
@@ -259,7 +259,7 @@ export default function RoutePlannerPage() {
           </div>
         </aside>
 
-        <section className="min-h-[300px] flex-1 overflow-hidden rounded-xl border border-border shadow-sm lg:min-h-0">
+        <section className="min-h-[350px] flex-1 overflow-hidden rounded-xl border border-border shadow-sm lg:min-h-0">
           <MapComponent
             locations={locations}
             optimizedRoute={optimizedRouteData}
